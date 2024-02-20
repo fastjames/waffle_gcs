@@ -79,7 +79,7 @@ defmodule Waffle.Storage.Google.UrlV2 do
 
   @spec build_signed_url(Types.definition(), String.t(), Keyword.t()) :: String.t()
   defp build_signed_url(definition, path, options) do
-    {:ok, client_id} = Goth.Config.get(:client_email)
+    {:ok, client_id} = find_client_email()
 
     expiration = System.os_time(:second) + expiry(options)
 
@@ -140,5 +140,21 @@ defmodule Waffle.Storage.Google.UrlV2 do
     |> :public_key.sign(:sha256, rsa_key)
     |> Base.encode64()
     |> URI.encode_www_form()
+  end
+
+  defp find_client_email do
+    case Goth.Config.get(:client_email) do
+      {:ok, client_email} -> {:ok, client_email}
+
+      :error ->
+        headers = [{"Metadata-Flavor", "Google"}]
+        url = "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email"
+        "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email"
+        {:ok, %{body: client_email, status_code: 200}} = HTTPoison.get(url, headers)
+
+        Goth.Config.set(:client_email, client_email)
+
+        {:ok, client_email}
+    end
   end
 end
